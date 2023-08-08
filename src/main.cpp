@@ -1,10 +1,14 @@
 #include "utils/Model.h"
 #include "utils/Skybox.h"
 #include <filesystem>
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
 
 namespace fs = std::filesystem;
 
-const unsigned int windowWidth = 800;
+const unsigned int windowWidth = 1200;
 const unsigned int windowHeight = 800;
 
 Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 3.0f));
@@ -48,6 +52,11 @@ int main()
     glViewport(0, 0, windowWidth, windowHeight);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
+    // init ImGui
+    ImGui::CreateContext();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
+    ImGui::StyleColorsDark();
     // ==========================================
 
     std::string parentDir = fs::current_path().parent_path().string() + "/" + "project";
@@ -86,7 +95,6 @@ int main()
     shaderProgram.Activate();
     for (int i = 0; i < lightColors.size(); i++)
     {
-        printf("lightColors[%d] = (%f, %f, %f)\n", i, lightColors[i].x, lightColors[i].y, lightColors[i].z);
         std::string lightColorName = "lightColors[" + std::to_string(i) + "]";
         std::string lightPosName = "lightPositions[" + std::to_string(i) + "]";
         glUniform3f(glGetUniformLocation(shaderProgram.ID, lightColorName.c_str()), lightColors[i].x, lightColors[i].y, lightColors[i].z);
@@ -100,7 +108,7 @@ int main()
 
     // Model sword((parentDir + modelPath + "sword/scene.gltf").c_str());
     // Model toy((parentDir + modelPath + "toy_car/scene.gltf").c_str());
-    Model bmw((parentDir + modelPath + "bmw/scene.gltf").c_str());
+    // Model bmw((parentDir + modelPath + "bmw/scene.gltf").c_str());
     // Model snake((parentDir + modelPath + "snake/scene.gltf").c_str());
     // Model bmw2((parentDir + modelPath + "bmw2/scene.gltf").c_str());
 
@@ -122,15 +130,26 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        camera.Inputs(window);
+        if (!ImGui::GetIO().WantCaptureMouse)
+            camera.Inputs(window);
         camera.updateMatrix(45.0f, 0.1f, 100.0f);
         skybox.Draw(skyboxShader, camera);
+
+                // imgui hello world
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        ImGui::ShowDemoWindow();
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+        
 
         // sword.Draw(shaderProgram, camera);
         // room.Draw(shaderProgram, camera);
         // toy.Draw(shaderProgram, camera);
         // snake.Draw(shaderProgram, camera);
-        bmw.Draw(shaderProgram, camera);
+        // bmw.Draw(shaderProgram, camera);
         // bmw2.Draw(shaderProgram, camera);
         // bmw1.Draw(shaderProgram, camera);
         // car.Draw(shaderProgram, camera);

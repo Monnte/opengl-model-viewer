@@ -1,0 +1,257 @@
+#include "Model.h"
+
+inline glm::mat4 aiMatrix4x4ToGlm(const aiMatrix4x4 *from)
+{
+	glm::mat4 to;
+
+	to[0][0] = (GLfloat)from->a1;
+	to[0][1] = (GLfloat)from->b1;
+	to[0][2] = (GLfloat)from->c1;
+	to[0][3] = (GLfloat)from->d1;
+	to[1][0] = (GLfloat)from->a2;
+	to[1][1] = (GLfloat)from->b2;
+	to[1][2] = (GLfloat)from->c2;
+	to[1][3] = (GLfloat)from->d2;
+	to[2][0] = (GLfloat)from->a3;
+	to[2][1] = (GLfloat)from->b3;
+	to[2][2] = (GLfloat)from->c3;
+	to[2][3] = (GLfloat)from->d3;
+	to[3][0] = (GLfloat)from->a4;
+	to[3][1] = (GLfloat)from->b4;
+	to[3][2] = (GLfloat)from->c4;
+	to[3][3] = (GLfloat)from->d4;
+
+	return to;
+}
+
+Material apply_material(const C_STRUCT aiMaterial *mtl)
+{
+	Material material;
+	aiColor4D diffuse, ambient, specular;
+	float metallic;
+	float roughness;
+	float opacity;
+
+	
+
+	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_DIFFUSE, &diffuse))
+	{
+		material.diffuse = glm::vec3(diffuse.r, diffuse.g, diffuse.b);
+		printf("diffuse: %f, %f, %f\n", diffuse.r, diffuse.g, diffuse.b);
+	}
+
+	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_AMBIENT, &ambient))
+	{
+		material.ambient = glm::vec3(ambient.r, ambient.g, ambient.b);
+	}
+
+	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_SPECULAR, &specular))
+	{
+		material.specular = glm::vec3(specular.r, specular.g, specular.b);
+	}
+
+	if (AI_SUCCESS == aiGetMaterialFloat(mtl, AI_MATKEY_METALLIC_FACTOR, &metallic))
+	{
+		material.metallic = metallic;
+	}
+
+	if (AI_SUCCESS == aiGetMaterialFloat(mtl, AI_MATKEY_ROUGHNESS_FACTOR, &roughness))
+	{
+		material.roughness = roughness;
+	}
+
+	if (AI_SUCCESS == aiGetMaterialFloat(mtl, AI_MATKEY_OPACITY, &opacity))
+	{
+		material.opacity = opacity;
+	}
+
+	return material;
+}
+
+Model::Model(std::string const &path)
+{
+	loadModel(path);
+}
+
+void Model::Draw(Shader &shader, Camera &camera)
+{
+
+	// for (unsigned int i = 0; i < meshes.size(); ++i)
+	// {
+	// 	meshes[i].Draw(shader, camera);
+	// }
+	// for each non-transparent mesh
+	for (unsigned int i = 0; i < nonTransparentMeshes.size(); ++i)
+	{
+		nonTransparentMeshes[i].Draw(shader, camera);
+	}
+
+	// turn on front face culling
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+
+	// for each transparent meshs
+	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
+	{
+		transparentMeshes[i].Draw(shader, camera);
+	}
+
+	// enable back face culling
+	glCullFace(GL_BACK);
+
+	// for each transparent mesh
+	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
+	{
+		transparentMeshes[i].Draw(shader, camera);
+	}
+
+	glDisable(GL_CULL_FACE);
+}
+
+void Model::loadModel(std::string const &path)
+{
+	Assimp::Importer importer;
+	const aiScene *scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+
+	if (!scene || !scene->mRootNode || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE)
+	{
+		std::cout << "ERROR::ASSIMP::" << importer.GetErrorString() << std::endl;
+		return;
+	}
+
+	directory = path.substr(0, path.find_last_of('/'));
+	processNode(scene->mRootNode, scene, glm::mat4(1.0f));
+}
+
+void Model::processNode(aiNode *node, const aiScene *scene, glm::mat4 parentTransform)
+{
+	glm::mat4 nodeTransform = parentTransform * aiMatrix4x4ToGlm(&node->mTransformation);
+	for (unsigned int i = 0; i < node->mNumMeshes; ++i)
+	{
+		aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
+		Mesh m = processMesh(mesh, scene, nodeTransform);
+		if (m.material.opacity < 1.0f)
+			transparentMeshes.push_back(m);
+		else
+			nonTransparentMeshes.push_back(m);
+	}
+
+	for (unsigned int i = 0; i < node->mNumChildren; ++i)
+		processNode(node->mChildren[i], scene, nodeTransform);
+}
+
+Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTransform)
+{
+	std::vector<Vertex> vertices;
+	std::vector<unsigned int> indices;
+	std::vector<Texture> textures;
+
+	Material mat = apply_material(scene->mMaterials[mesh->mMaterialIndex]);
+	for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
+	{
+		Vertex vertex;
+
+		// Process vertex positions, normals and texture coordinates
+		glm::vec3 vector;
+		vector.x = mesh->mVertices[i].x;
+		vector.y = mesh->mVertices[i].y;
+		vector.z = mesh->mVertices[i].z;
+		vertex.position = vector;
+
+
+		if (mesh->HasNormals())
+		{
+			vector.x = mesh->mNormals[i].x;
+			vector.y = mesh->mNormals[i].y;
+			vector.z = mesh->mNormals[i].z;
+			vertex.normal = vector;
+		}
+
+		if (mesh->mTextureCoords[0])
+		{
+			glm::vec2 vec;
+			// A vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't
+			// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
+			vec.x = mesh->mTextureCoords[0][i].x;
+			vec.y = mesh->mTextureCoords[0][i].y;
+			vertex.texUV = vec;
+		}
+		else
+			vertex.texUV = glm::vec2(0.0f, 0.0f);
+
+		vertices.push_back(vertex);
+	}
+
+	// Process indices
+	for (unsigned int i = 0; i < mesh->mNumFaces; ++i)
+	{
+		aiFace face = mesh->mFaces[i];
+
+		assert(face.mNumIndices == 3);
+
+		for (unsigned int j = 0; j < face.mNumIndices; ++j)
+			indices.push_back(face.mIndices[j]);
+	}
+
+	if (mesh->mMaterialIndex >= 0)
+	{
+		aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
+		std::vector<Texture> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, "diffuse", 0);
+		textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+
+		std::vector<Texture> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR, "specular", 1);
+		textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+
+		std::vector<Texture> normalMaps = loadMaterialTextures(material, aiTextureType_NORMALS, "normal", 2);
+		textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
+
+		std::vector<Texture> metallicMaps = loadMaterialTextures(material, aiTextureType_METALNESS, "metallic", 3);
+		textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
+
+		// std::vector<Texture> roughnessMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, "metallic", 3);
+		// textures.insert(textures.end(), roughnessMaps.begin(), roughnessMaps.end());
+	}
+
+	// printf("Vertices: %d\n", vertices.size());
+	// printf("Indices: %d\n", indices.size());
+	// printf("Textures: %d\n", textures.size());
+
+	return Mesh(vertices, indices, textures, parentTransform, mat);
+}
+
+std::vector<Texture> Model::loadMaterialTextures(aiMaterial *mat, aiTextureType type, std::string typeName, GLuint slot)
+{
+	std::vector<Texture> textures;
+
+	for (unsigned int i = 0; i < mat->GetTextureCount(type); ++i)
+	{
+		aiString str;
+		mat->GetTexture(type, i, &str);
+
+		bool skip = false;
+
+		for (unsigned int j = 0; j < texturePaths.size(); ++j)
+		{
+			if (std::strcmp(texturePaths[j].c_str(), str.C_Str()) == 0)
+			{
+				textures.push_back(texturesLoaded[j]);
+				printf("Loaded texture: %s, type %s\n", str.C_Str(), typeName.c_str());
+				skip = true;
+				break;
+			}
+		}
+
+		if (!skip)
+		{
+			std::string texturePath = directory + '/' + std::string(str.C_Str());
+			Texture texture(texturePath.c_str(), typeName.c_str(), slot);
+			printf("Loaded texture: %s, type %s\n", texturePath.c_str(), typeName.c_str());
+
+			textures.push_back(texture);
+			texturePaths.push_back(str.C_Str());
+			texturesLoaded.push_back(texture);
+		}
+	}
+
+	return textures;
+}

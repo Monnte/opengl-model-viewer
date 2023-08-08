@@ -1,0 +1,41 @@
+#version 330 core
+
+// Positions/Coordinates
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTex;
+layout (location = 3) in vec3 aTangent;
+layout (location = 4) in vec3 aBitangent;
+
+out Vertex {
+	vec3 position;
+	vec2 texCoords;
+	mat3 tangentBasis;
+	vec3 normal;
+} vout;
+
+out vec3 eyePosition;
+
+// Imports the camera matrix
+uniform mat4 camMatrix;
+// Imports the transformation matrices
+uniform mat4 model;
+// Gets the position of the light from the main function
+uniform vec3 lightPositions[4];
+// Gets the position of the camera from the main function
+uniform vec3 camPos;
+
+void main()
+{
+
+	vout.position = vec3(model * vec4(aPos, 1.0));
+	vout.texCoords = aTex;
+	vout.normal = aNormal; // not sure
+
+	vout.tangentBasis = mat3(model) * mat3(aTangent, aBitangent, aNormal);
+
+	eyePosition = camPos;
+
+	gl_Position = camMatrix * model * vec4(aPos, 1.0);
+
+}

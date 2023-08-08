@@ -37,7 +37,6 @@ Material apply_material(const C_STRUCT aiMaterial *mtl)
 	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_DIFFUSE, &diffuse))
 	{
 		material.diffuse = glm::vec3(diffuse.r, diffuse.g, diffuse.b);
-		printf("diffuse: %f, %f, %f\n", diffuse.r, diffuse.g, diffuse.b);
 	}
 
 	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_AMBIENT, &ambient))
@@ -151,7 +150,6 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTran
 	{
 		Vertex vertex;
 
-		// Process vertex positions, normals and texture coordinates
 		glm::vec3 vector;
 		vector.x = mesh->mVertices[i].x;
 		vector.y = mesh->mVertices[i].y;
@@ -170,8 +168,6 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTran
 		if (mesh->mTextureCoords[0])
 		{
 			glm::vec2 vec;
-			// A vertex can contain up to 8 different texture coordinates. We thus make the assumption that we won't
-			// use models where a vertex can have multiple texture coordinates so we always take the first set (0).
 			vec.x = mesh->mTextureCoords[0][i].x;
 			vec.y = mesh->mTextureCoords[0][i].y;
 			vertex.texUV = vec;
@@ -235,7 +231,7 @@ std::vector<Texture> Model::loadMaterialTextures(aiMaterial *mat, aiTextureType 
 			if (std::strcmp(texturePaths[j].c_str(), str.C_Str()) == 0)
 			{
 				textures.push_back(texturesLoaded[j]);
-				printf("Loaded texture: %s, type %s\n", str.C_Str(), typeName.c_str());
+				// printf("Loaded texture: %s, type %s\n", str.C_Str(), typeName.c_str());
 				skip = true;
 				break;
 			}
@@ -245,7 +241,7 @@ std::vector<Texture> Model::loadMaterialTextures(aiMaterial *mat, aiTextureType 
 		{
 			std::string texturePath = directory + '/' + std::string(str.C_Str());
 			Texture texture(texturePath.c_str(), typeName.c_str(), slot);
-			printf("Loaded texture: %s, type %s\n", texturePath.c_str(), typeName.c_str());
+			// printf("Loaded texture: %s, type %s\n", texturePath.c_str(), typeName.c_str());
 
 			textures.push_back(texture);
 			texturePaths.push_back(str.C_Str());

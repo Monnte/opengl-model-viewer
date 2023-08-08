@@ -73,6 +73,9 @@ void Mesh::Draw(Shader &shader, Camera &camera)
 	// Take care of the camera Matrix
 	glUniform3f(glGetUniformLocation(shader.ID, "camPos"), camera.Position.x, camera.Position.y, camera.Position.z);
 	camera.Matrix(shader, "camMatrix");
+	glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(glm::mat3(matrix))));
+	glUniformMatrix3fv(glGetUniformLocation(shader.ID, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
+
 
 	glUniform3f(glGetUniformLocation(shader.ID, "materialAmbientColor"), material.ambient.x, material.ambient.y, material.ambient.z);
 	glUniform3f(glGetUniformLocation(shader.ID, "materialDiffuseColor"), material.diffuse.x, material.diffuse.y, material.diffuse.z);

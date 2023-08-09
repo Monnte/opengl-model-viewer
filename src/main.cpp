@@ -1,17 +1,19 @@
 #include "utils/Model.h"
 #include "utils/Skybox.h"
+#include "utils/Light.h"
 #include <filesystem>
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 
+#define MAX_LIGHTS 25 // don't forget to change the value in the shader
 
 namespace fs = std::filesystem;
 
 const unsigned int windowWidth = 1200;
 const unsigned int windowHeight = 800;
 
-Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 0.0f, 3.0f));
+Camera camera(windowWidth, windowHeight, glm::vec3(0.0f, 1.0f, 2.0f), 45.0f, 0.1f, 100.0f);
 
 void framebuffer_size_callback(GLFWwindow *window, int width, int height)
 {
@@ -20,8 +22,92 @@ void framebuffer_size_callback(GLFWwindow *window, int width, int height)
     camera.height = height;
 }
 
+void DrawModelCombo(Model *&currentModel, std::vector<string> &modelNames, std::vector<string> &modelPaths, int *currentName)
+{
+    ImGui::Text("Select Model");
+    if (ImGui::Combo(
+            "##ModelCombo", currentName, [](void *data, int idx, const char **out_text)
+            {
+            *out_text = (*(std::vector<std::string> *)data)[idx].c_str();
+            return true; },
+            (void *)&modelNames, modelNames.size()))
+    {
+        currentModel = new Model(modelPaths[*currentName]);
+    }
+}
+
+void DrawSkyboxCombo(Skybox *&currentSkybox, std::vector<string> &skyboxNames, std::vector<string> &skyboxPaths, int *currentName)
+{
+    ImGui::Text("Select Skybox");
+    if (ImGui::Combo(
+            "##SkyboxCombo", currentName, [](void *data, int idx, const char **out_text)
+            {
+            *out_text = (*(std::vector<std::string> *)data)[idx].c_str();
+            return true; },
+            (void *)&skyboxNames, skyboxNames.size()))
+    {
+        currentSkybox = new Skybox(skyboxPaths[*currentName]);
+    }
+}
+
+void DrawLightsMenu(std::vector<Light> &lights, Shader &shaderProgram)
+{
+    std::string header = "Lights (" + std::to_string(lights.size()) + " / " + std::to_string(MAX_LIGHTS) + ")";
+    ImGui::Text(header.c_str());
+    static int currentLightIndex = 0;
+    std::vector<string> lightNames;
+    for (int i = 0; i < lights.size(); i++)
+    {
+        lightNames.push_back("Light " + std::to_string(i + 1));
+    }
+
+    ImGui::Combo(
+        "##LightCombo", &currentLightIndex, [](void *data, int idx, const char **out_text)
+        {
+            *out_text = (*(std::vector<std::string> *)data)[idx].c_str();
+            return true; },
+        (void *)&lightNames, lightNames.size());
+
+    if (ImGui::DragFloat3("Position", glm::value_ptr(lights[currentLightIndex].position), 0.1f))
+    {
+        lights[currentLightIndex].SetUniform(shaderProgram, currentLightIndex);
+    }
+    if (ImGui::ColorEdit3("Color", glm::value_ptr(lights[currentLightIndex].color)))
+    {
+        lights[currentLightIndex].SetUniform(shaderProgram, currentLightIndex);
+    }
+    if (ImGui::DragFloat("Intensity", &lights[currentLightIndex].intensity, 5.0f, 0.0f, 10000.0f))
+    {
+        lights[currentLightIndex].SetUniform(shaderProgram, currentLightIndex);
+    }
+
+    if (ImGui::Button("Add Light"))
+    {
+        if (lights.size() < MAX_LIGHTS)
+        {
+            lights.push_back(Light(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(1.0f), 200.0f));
+            lights[lights.size() - 1].SetUniform(shaderProgram, lights.size() - 1);
+            glUniform1i(glGetUniformLocation(shaderProgram.ID, "lightCount"), lights.size());
+            currentLightIndex = lights.size() - 1;
+        }
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Remove Light"))
+    {
+        if (lights.size() > 1)
+        {
+            lights.pop_back();
+            glUniform1i(glGetUniformLocation(shaderProgram.ID, "lightCount"), lights.size());
+            currentLightIndex = lights.size() - 1;
+        }
+    }
+}
+
 int main()
 {
+    // init glfw and glad
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -57,66 +143,81 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330 core");
     ImGui::StyleColorsDark();
+
     // ==========================================
 
     std::string parentDir = fs::current_path().parent_path().string() + "/" + "project";
     std::string texPath = "/assets/textures/";
     std::string shaderPath = "/assets/shaders/";
     std::string modelPath = "/assets/models/";
-    std::string skyboxPath = "/assets/skybox/clouds/";
+    std::string skyboxPath = "/assets/skybox/";
 
-    std::vector<std::string> facesCubemap = {
-        parentDir + skyboxPath + "px.png",
-        parentDir + skyboxPath + "nx.png",
-        parentDir + skyboxPath + "py.png",
-        parentDir + skyboxPath + "ny.png",
-        parentDir + skyboxPath + "pz.png",
-        parentDir + skyboxPath + "nz.png"};
+    // get all folders in modelPath that contains gltf files
+    std::vector<string> ModelPaths = {};
+    std::vector<string> ModelNames = {};
+
+    std::vector<string> SkyboxPaths = {};
+    std::vector<string> SkyboxNames = {};
+
+    for (const auto &entry : fs::directory_iterator(parentDir + modelPath))
+    {
+        if (entry.is_directory())
+        {
+            for (const auto &subEntry : fs::directory_iterator(entry.path()))
+            {
+                if (subEntry.path().extension() == ".gltf")
+                {
+                    ModelPaths.push_back(subEntry.path().string());
+                    ModelNames.push_back(entry.path().filename().string());
+                }
+            }
+        }
+    }
+
+    for (const auto &entry : fs::directory_iterator(parentDir + skyboxPath))
+    {
+        if (entry.is_directory())
+        {
+            // save path to skybox and folder name
+            SkyboxPaths.push_back(entry.path().string());
+            SkyboxNames.push_back(entry.path().filename().string());
+        }
+    }
+
+    // ==========================================
+
+    // std::vector<std::string> facesCubemap = {
+    //     parentDir + skyboxPath + "clouds/px.png",
+    //     parentDir + skyboxPath + "clouds/nx.png",
+    //     parentDir + skyboxPath + "clouds/py.png",
+    //     parentDir + skyboxPath + "clouds/ny.png",
+    //     parentDir + skyboxPath + "clouds/pz.png",
+    //     parentDir + skyboxPath + "clouds/nz.png"};
 
     // ==========================================
 
     Shader shaderProgram((parentDir + shaderPath + "pbr.vert").c_str(), (parentDir + shaderPath + "pbr.frag").c_str());
     Shader skyboxShader((parentDir + shaderPath + "skybox.vert").c_str(), (parentDir + shaderPath + "skybox.frag").c_str());
 
-    // 4 light sources for the scene in 4 corners
-    std::vector<glm::vec3> lightColors = {
-        glm::vec3(150.0f, 150.0f, 150.0f),
-        glm::vec3(150.0f, 150.0f, 150.0f)
+    std::vector<Light> lights = {
+        Light(glm::vec3(-0.7f, 4.0f, -5.0f), glm::vec3(1.0f, 1.0f, 1.0f), 150.0f),
+        Light(glm::vec3(-0.7f, 4.0f, 5.0f), glm::vec3(1.0f, 1.0f, 1.0f), 150.0f)};
 
-    };
-    std::vector<glm::vec3> lightPositions = {
-        glm::vec3(-0.7f, 4.0f, -5.0f),
-        glm::vec3(-0.7f, 4.0f, 5.0f)
-
-    };
-
-    // glm::vec4 lightColor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-    // glm::vec3 lightPos = glm::vec3(0.5f, 0.5f, 0.5f);
     shaderProgram.Activate();
-    for (int i = 0; i < lightColors.size(); i++)
+    glUniform1i(glGetUniformLocation(shaderProgram.ID, "lightCount"), lights.size());
+    for (int i = 0; i < lights.size(); i++)
     {
-        std::string lightColorName = "lightColors[" + std::to_string(i) + "]";
-        std::string lightPosName = "lightPositions[" + std::to_string(i) + "]";
-        glUniform3f(glGetUniformLocation(shaderProgram.ID, lightColorName.c_str()), lightColors[i].x, lightColors[i].y, lightColors[i].z);
-        glUniform3f(glGetUniformLocation(shaderProgram.ID, lightPosName.c_str()), lightPositions[i].x, lightPositions[i].y, lightPositions[i].z);
+        lights[i].SetUniform(shaderProgram, i);
     }
 
     skyboxShader.Activate();
     glUniform1i(glGetUniformLocation(skyboxShader.ID, "skybox"), 0);
 
-    Skybox skybox(facesCubemap);
-
-    // Model sword((parentDir + modelPath + "sword/scene.gltf").c_str());
-    // Model toy((parentDir + modelPath + "toy_car/scene.gltf").c_str());
-    // Model bmw((parentDir + modelPath + "bmw/scene.gltf").c_str());
-    // Model snake((parentDir + modelPath + "snake/scene.gltf").c_str());
-    // Model bmw2((parentDir + modelPath + "bmw2/scene.gltf").c_str());
-
-    // Model car((parentDir + modelPath + "car/scene.gltf").c_str());
-    // Model room((parentDir + modelPath + "room/scene.gltf").c_str());
-    // Model bmw1((parentDir + modelPath + "bmw1/scene.gltf").c_str());
-    // Model cat((parentDir + modelPath + "cat/scene.gltf").c_str());
-    // Model floor((parentDir + modelPath + "cobble_floor/patterned_cobblestone_4k.gltf").c_str());
+    // default model and skybox
+    std::string defaultSkybox = (parentDir + skyboxPath + "clouds");
+    std::string defaultModel = (parentDir + modelPath + "bmw/scene.gltf");
+    Skybox skybox(defaultSkybox.c_str());
+    Model bmw(defaultModel.c_str());
 
     // ==========================================
 
@@ -127,34 +228,45 @@ int main()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    Model *currentModel = &bmw;
+    Skybox *currentSkybox = &skybox;
+    // find index of default model and skybox
+    int currentModelIndex = std::find(ModelPaths.begin(), ModelPaths.end(), defaultModel) - ModelPaths.begin();
+    int currentSkyboxIndex = std::find(SkyboxPaths.begin(), SkyboxPaths.end(), defaultSkybox) - SkyboxPaths.begin();
     while (!glfwWindowShouldClose(window))
     {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        // ==========================================
+        // Camera and Skybox
         if (!ImGui::GetIO().WantCaptureMouse)
             camera.Inputs(window);
-        camera.updateMatrix(45.0f, 0.1f, 100.0f);
-        skybox.Draw(skyboxShader, camera);
 
-                // imgui hello world
+        camera.updateMatrix();
+        currentSkybox->Draw(skyboxShader, camera);
+
+        // ==========================================
+        // Draw models
+
+        currentModel->Draw(shaderProgram, camera);
+
+        // ==========================================
+        // ImGui
+
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        ImGui::Begin("Menu");
 
-        ImGui::ShowDemoWindow();
+        // ==========================================
+        DrawModelCombo(currentModel, ModelNames, ModelPaths, &currentModelIndex);
+        DrawSkyboxCombo(currentSkybox, SkyboxNames, SkyboxPaths, &currentSkyboxIndex);
+        DrawLightsMenu(lights, shaderProgram);
+        // ==========================================
+
+        ImGui::End();
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        
-
-        // sword.Draw(shaderProgram, camera);
-        // room.Draw(shaderProgram, camera);
-        // toy.Draw(shaderProgram, camera);
-        // snake.Draw(shaderProgram, camera);
-        // bmw.Draw(shaderProgram, camera);
-        // bmw2.Draw(shaderProgram, camera);
-        // bmw1.Draw(shaderProgram, camera);
-        // car.Draw(shaderProgram, camera);
-        // floor.Draw(shaderProgram, camera);
-        // cat.Draw(shaderProgram, camera);
 
         glfwSwapBuffers(window);
         glfwPollEvents();

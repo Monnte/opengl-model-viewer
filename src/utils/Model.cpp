@@ -32,8 +32,6 @@ Material apply_material(const C_STRUCT aiMaterial *mtl)
 	float roughness;
 	float opacity;
 
-	
-
 	if (AI_SUCCESS == aiGetMaterialColor(mtl, AI_MATKEY_COLOR_DIFFUSE, &diffuse))
 	{
 		material.diffuse = glm::vec3(diffuse.r, diffuse.g, diffuse.b);
@@ -75,30 +73,21 @@ Model::Model(std::string const &path)
 void Model::Draw(Shader &shader, Camera &camera)
 {
 
-	// for (unsigned int i = 0; i < meshes.size(); ++i)
-	// {
-	// 	meshes[i].Draw(shader, camera);
-	// }
-	// for each non-transparent mesh
 	for (unsigned int i = 0; i < nonTransparentMeshes.size(); ++i)
 	{
 		nonTransparentMeshes[i].Draw(shader, camera);
 	}
 
-	// turn on front face culling
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 
-	// for each transparent meshs
 	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
 	{
 		transparentMeshes[i].Draw(shader, camera);
 	}
 
-	// enable back face culling
 	glCullFace(GL_BACK);
 
-	// for each transparent mesh
 	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
 	{
 		transparentMeshes[i].Draw(shader, camera);

@@ -6,7 +6,9 @@ in vec2 TexCoords;
 in vec3 WorldPos;
 in vec3 Normal;
 
-const int lightCount = 2;
+#define MAX_LIGHTS 25
+
+uniform int lightCount;
 
 uniform sampler2D diffuse0;
 uniform sampler2D specular0;
@@ -27,8 +29,8 @@ uniform float materialShininess;
 uniform float opacity;
 
 // lights
-uniform vec3 lightPositions[lightCount];
-uniform vec3 lightColors[lightCount];
+uniform vec3 lightPositions[MAX_LIGHTS];
+uniform vec3 lightColors[MAX_LIGHTS];
 
 uniform vec3 camPos;
 

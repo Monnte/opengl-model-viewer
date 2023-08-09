@@ -21,7 +21,7 @@ class Skybox
 public:
 	GLuint textureID;
 	VAO vao;
-	Skybox(std::vector<std::string> facesCubemap);
+	Skybox(std::string path);
 	void Draw(Shader &skyboxShader, Camera &camera);
 };
 

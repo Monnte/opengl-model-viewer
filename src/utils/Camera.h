@@ -17,9 +17,14 @@ public:
 	glm::vec3 Position;
 	glm::vec3 Orientation = glm::vec3(0.0f, 0.0f, -1.0f);
 	glm::vec3 Up = glm::vec3(0.0f, 1.0f, 0.0f);
+
 	glm::mat4 cameraMatrix = glm::mat4(1.0f);
 	glm::mat4 viewMatrix = glm::mat4(1.0f);
 	glm::mat4 projectionMatrix = glm::mat4(1.0f);
+
+	float FOV;
+	float nearPlane;
+	float farPlane;
 
 	bool firstClick = true;
 
@@ -29,9 +34,9 @@ public:
 	float speed = 0.05f;
 	float sensitivity = 100.0f;
 
-	Camera(int width, int height, glm::vec3 position);
+	Camera(int width, int height, glm::vec3 position, float FOVdeg, float nearPlane, float farPlane);
 
-	void updateMatrix(float FOVdeg, float nearPlane, float farPlane);
+	void updateMatrix();
 	void Matrix(Shader &shader, const char *uniform);
 	void Inputs(GLFWwindow *window);
 };

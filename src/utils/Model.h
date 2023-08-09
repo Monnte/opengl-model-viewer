@@ -10,14 +10,10 @@
 #include <assimp/pbrmaterial.h>
 
 
-
-
-
 class Model
 {
 public:
 	Model(std::string const &path);
-
 	void Draw(Shader &shader, Camera &camera);
 
 private:

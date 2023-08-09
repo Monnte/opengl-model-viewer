@@ -1,7 +1,17 @@
 #include "Skybox.h"
 
-Skybox::Skybox(std::vector<std::string> facesCubemap)
+Skybox::Skybox(std::string path)
 {
+
+	std::vector<std::string> facesCubemap = {
+		path + "/px.png",
+		path + "/nx.png",
+		path + "/py.png",
+		path + "/ny.png",
+		path + "/pz.png",
+		path + "/nz.png"
+	};
+
 	std::vector<Vertex> vertices = {
 		Vertex{glm::vec3(-1.0f, -1.0f, 1.0f), glm::vec3(0), glm::vec2(0)},
 		Vertex{glm::vec3(1.0f, -1.0f, 1.0f), glm::vec3(0), glm::vec2(0)},
@@ -48,7 +58,7 @@ void Skybox::Draw(Shader &skyboxShader, Camera &camera)
 {
 	skyboxShader.Activate();
 	vao.Bind();
-	
+
 	glDepthFunc(GL_LEQUAL);
 
 	glm::mat4 view = glm::mat4(1.0f);

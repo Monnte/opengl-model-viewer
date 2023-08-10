@@ -15,6 +15,12 @@ class Model
 public:
 	Model(std::string const &path);
 	void Draw(Shader &shader, Camera &camera);
+	void UpdateTransformMatrix();
+	glm::vec3 translate = glm::vec3(0.0f);
+	glm::vec3 scale = glm::vec3(1.0f);
+	glm::vec3 rotate = glm::vec3(0.0f);
+
+	glm::mat4 transformMatrix = glm::mat4(1.0f);
 
 private:
 	std::vector<Mesh> nonTransparentMeshes;

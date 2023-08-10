@@ -70,12 +70,22 @@ Model::Model(std::string const &path)
 	loadModel(path);
 }
 
+void Model::UpdateTransformMatrix()
+{
+	transformMatrix = glm::mat4(1.0f);
+	transformMatrix = glm::translate(transformMatrix, translate);
+	transformMatrix = glm::rotate(transformMatrix, glm::radians(rotate.x), glm::vec3(1.0f, 0.0f, 0.0f));
+	transformMatrix = glm::rotate(transformMatrix, glm::radians(rotate.y), glm::vec3(0.0f, 1.0f, 0.0f));
+	transformMatrix = glm::rotate(transformMatrix, glm::radians(rotate.z), glm::vec3(0.0f, 0.0f, 1.0f));
+	transformMatrix = glm::scale(transformMatrix, scale);
+}
+
 void Model::Draw(Shader &shader, Camera &camera)
 {
 
 	for (unsigned int i = 0; i < nonTransparentMeshes.size(); ++i)
 	{
-		nonTransparentMeshes[i].Draw(shader, camera);
+		nonTransparentMeshes[i].Draw(shader, camera, transformMatrix);
 	}
 
 	glEnable(GL_CULL_FACE);
@@ -83,14 +93,14 @@ void Model::Draw(Shader &shader, Camera &camera)
 
 	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
 	{
-		transparentMeshes[i].Draw(shader, camera);
+		transparentMeshes[i].Draw(shader, camera, transformMatrix);
 	}
 
 	glCullFace(GL_BACK);
 
 	for (unsigned int i = 0; i < transparentMeshes.size(); ++i)
 	{
-		transparentMeshes[i].Draw(shader, camera);
+		transparentMeshes[i].Draw(shader, camera, transformMatrix);
 	}
 
 	glDisable(GL_CULL_FACE);
@@ -144,7 +154,6 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTran
 		vector.y = mesh->mVertices[i].y;
 		vector.z = mesh->mVertices[i].z;
 		vertex.position = vector;
-
 
 		if (mesh->HasNormals())
 		{

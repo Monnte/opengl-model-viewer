@@ -27,6 +27,6 @@ public:
 		Material material = Material());
 		
 
-	void Draw(Shader &shader, Camera &camera);
+	void Draw(Shader &shader, Camera &camera, glm::mat4 transformMatrix);
 };
 #endif

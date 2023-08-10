@@ -21,7 +21,7 @@ Mesh::Mesh(std::vector<Vertex> &vertices, std::vector<GLuint> &indices, std::vec
 	ebo.Unbind();
 }
 
-void Mesh::Draw(Shader &shader, Camera &camera)
+void Mesh::Draw(Shader &shader, Camera &camera, glm::mat4 transformMatrix)
 {
 	shader.Activate();
 	vao.Bind();
@@ -76,16 +76,15 @@ void Mesh::Draw(Shader &shader, Camera &camera)
 	glm::mat3 normalMatrix = glm::mat3(glm::transpose(glm::inverse(glm::mat3(matrix))));
 	glUniformMatrix3fv(glGetUniformLocation(shader.ID, "normalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix));
 
-
 	glUniform3f(glGetUniformLocation(shader.ID, "materialAmbientColor"), material.ambient.x, material.ambient.y, material.ambient.z);
 	glUniform3f(glGetUniformLocation(shader.ID, "materialDiffuseColor"), material.diffuse.x, material.diffuse.y, material.diffuse.z);
 	glUniform3f(glGetUniformLocation(shader.ID, "materialSpecularColor"), material.specular.x, material.specular.y, material.specular.z);
 	glUniform1f(glGetUniformLocation(shader.ID, "materialMetallic"), material.metallic);
 	glUniform1f(glGetUniformLocation(shader.ID, "materialRoughness"), material.roughness);
 	glUniform1f(glGetUniformLocation(shader.ID, "opacity"), material.opacity);
-	
 
-	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(matrix));
+	glm::mat4 modelMatrix = transformMatrix * matrix;
+	glUniformMatrix4fv(glGetUniformLocation(shader.ID, "model"), 1, GL_FALSE, glm::value_ptr(modelMatrix));
 
 	// Draw the actual mesh
 	glDrawElements(GL_TRIANGLES, indices.size(), GL_UNSIGNED_INT, 0);

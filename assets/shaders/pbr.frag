@@ -14,6 +14,7 @@ uniform sampler2D diffuse0;
 uniform sampler2D specular0;
 uniform sampler2D normal0;
 uniform sampler2D metallic0;
+uniform samplerCube shadowMap;
 
 uniform bool hasTexture;
 uniform bool hasNormalMap;
@@ -33,6 +34,9 @@ uniform vec3 lightPositions[MAX_LIGHTS];
 uniform vec3 lightColors[MAX_LIGHTS];
 
 uniform vec3 camPos;
+uniform float farPlane;
+
+uniform bool showShadows;
 
 const float PI = 3.14159265359;
 
@@ -96,6 +100,40 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness)
 vec3 fresnelSchlick(float cosTheta, vec3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// ----------------------------------------------------------------------------
+// array of offset direction for sampling
+vec3 gridSamplingDisk[20] = vec3[]
+(
+   vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
+   vec3(1, 1, -1), vec3( 1, -1, -1), vec3(-1, -1, -1), vec3(-1, 1, -1),
+   vec3(1, 1,  0), vec3( 1, -1,  0), vec3(-1, -1,  0), vec3(-1, 1,  0),
+   vec3(1, 0,  1), vec3(-1,  0,  1), vec3( 1,  0, -1), vec3(-1, 0, -1),
+   vec3(0, 1,  1), vec3( 0, -1,  1), vec3( 0, -1, -1), vec3( 0, 1, -1)
+);
+
+float ShadowCalculation(vec3 fragPos)
+{
+    vec3 fragToLight = fragPos - lightPositions[0];
+    float currentDepth = length(fragToLight);
+    float shadow = 0.0;
+    float bias = 0.15;
+    int samples = 20;
+    float viewDistance = length(camPos - fragPos);
+    float diskRadius = (1.0 + (viewDistance / farPlane)) / 25.0;
+    for(int i = 0; i < samples; ++i)
+    {
+        float closestDepth = texture(shadowMap, fragToLight + gridSamplingDisk[i] * diskRadius).r;
+        closestDepth *= farPlane;   // undo mapping [0;1]
+        if(currentDepth - bias > closestDepth)
+            shadow += 1.0;
+
+        //  FragColor = vec4(vec3(closestDepth / farPlane), 1.0);
+
+    }
+    shadow /= float(samples);
+        
+    return shadow;
 }
 // ----------------------------------------------------------------------------
 void main()
@@ -175,14 +213,23 @@ void main()
         float NdotL = max(dot(N, L), 0.0);        
 
         // add to outgoing radiance Lo
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;  // note that we already multiplied the BRDF by the Fresnel (kS) so we won't multiply by kS again
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }   
     
     // ambient lighting (note that the next IBL tutorial will replace 
     // this ambient lighting with environment lighting).
     vec3 ambient = vec3(0.03) * albedo * ao;
-    
-    vec3 color = ambient + Lo;
+
+    vec3 color = ambient;
+    if (showShadows)
+    {
+        float shadow = ShadowCalculation(WorldPos);
+        color += Lo * (1.0 - shadow);
+    }
+    else
+    {
+        color += Lo;
+    }
 
     // HDR tonemapping
     color = color / (color + vec3(1.0));
@@ -190,4 +237,5 @@ void main()
     color = pow(color, vec3(1.0/2.2)); 
 
     FragColor = vec4(color, opacity);
+    // FragColor = vec4(vec3(shadow), 1.0);
 }

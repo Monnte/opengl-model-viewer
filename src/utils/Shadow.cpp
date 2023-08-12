@@ -67,5 +67,4 @@ void Shadow::Activate(Shader shader, unsigned int textureUnit)
 	shader.Activate();
 	glActiveTexture(GL_TEXTURE0 + textureUnit);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, depthMap);
-	glUniform1i(glGetUniformLocation(shader.ID, "shadowMap"), textureUnit);
 }

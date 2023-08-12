@@ -1,5 +1,7 @@
 #version 330 core
 
+// taken and combined from https://github.com/JoeyDeVries/LearnOpenGL/tree/master 
+
 out vec4 FragColor;
 
 in vec2 TexCoords;
@@ -15,6 +17,9 @@ uniform sampler2D specular0;
 uniform sampler2D normal0;
 uniform sampler2D metallic0;
 uniform samplerCube shadowMap;
+uniform samplerCube irradianceMap;
+uniform samplerCube prefilterMap;
+uniform sampler2D brdfLUT;
 
 uniform bool hasTexture;
 uniform bool hasNormalMap;
@@ -29,7 +34,6 @@ uniform float materialRoughness;
 uniform float materialShininess;
 uniform float opacity;
 
-// lights
 uniform vec3 lightPositions[MAX_LIGHTS];
 uniform vec3 lightColors[MAX_LIGHTS];
 
@@ -41,10 +45,6 @@ uniform bool showShadows;
 const float PI = 3.14159265359;
 
 // ----------------------------------------------------------------------------
-// Easy trick to get tangent-normals to world-space to keep PBR code simplified.
-// Don't worry if you don't get what's going on; you generally want to do normal 
-// mapping the usual way for performance anyways; I do plan make a note of this 
-// technique somewhere later in the normal mapping tutorial.
 vec3 getNormalFromMap()
 {
     vec3 tangentNormal = texture(normal0, TexCoords).xyz * 2.0 - 1.0;
@@ -102,7 +102,11 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 // ----------------------------------------------------------------------------
-// array of offset direction for sampling
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness)
+{
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}   
+// ----------------------------------------------------------------------------
 vec3 gridSamplingDisk[20] = vec3[]
 (
    vec3(1, 1,  1), vec3( 1, -1,  1), vec3(-1, -1,  1), vec3(-1, 1,  1), 
@@ -124,12 +128,9 @@ float ShadowCalculation(vec3 fragPos)
     for(int i = 0; i < samples; ++i)
     {
         float closestDepth = texture(shadowMap, fragToLight + gridSamplingDisk[i] * diskRadius).r;
-        closestDepth *= farPlane;   // undo mapping [0;1]
+        closestDepth *= farPlane;
         if(currentDepth - bias > closestDepth)
             shadow += 1.0;
-
-        //  FragColor = vec4(vec3(closestDepth / farPlane), 1.0);
-
     }
     shadow /= float(samples);
         
@@ -137,88 +138,81 @@ float ShadowCalculation(vec3 fragPos)
 }
 // ----------------------------------------------------------------------------
 void main()
-{		
-    // vec3 albedo     = pow(texture(diffuse0, TexCoords).rgb, vec3(2.2));
-    // float metallic  = texture(metallicMap, TexCoords).r;
-    // float roughness = texture(roughnessMap, TexCoords).r;
-    // float ao        = texture(aoMap, TexCoords).r;
+{
 
     vec3 albedo = materialDiffuseColor;
     if (hasTexture)
     {
-        albedo *= pow(texture(diffuse0, TexCoords).rgb, vec3(2.2));
+        albedo = pow(texture(diffuse0, TexCoords).rgb, vec3(2.2));
     }
 
     float metallic = materialMetallic;
     if (hasMetalicRoughnessMap)
     {
-        metallic *= texture(metallic0, TexCoords).b;
+        metallic = texture(metallic0, TexCoords).b;
     }
 
     float roughness = materialRoughness;
     if (hasMetalicRoughnessMap)
     {
-        roughness *= texture(metallic0, TexCoords).g;
+        roughness = texture(metallic0, TexCoords).g;
     }
 
     vec3 ao = materialAmbientColor;
 
     
-
-    // vec3 N = getNormalFromMap();
     vec3 N = normalize(Normal);
     if (hasNormalMap)
     {
         N = getNormalFromMap();
     }
     vec3 V = normalize(camPos - WorldPos);
+    vec3 R = reflect(-V, N); 
 
-    // calculate reflectance at normal incidence; if dia-electric (like plastic) use F0 
-    // of 0.04 and if it's a metal, use the albedo color as F0 (metallic workflow)    
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
 
-    // reflectance equation
     vec3 Lo = vec3(0.0);
     for(int i = 0; i < lightCount; ++i) 
     {
-        // calculate per-light radiance
-        vec3 L = normalize(lightPositions[i] - 0);
+        vec3 L = normalize(lightPositions[i] - WorldPos);
         vec3 H = normalize(V + L);
         float distance = length(lightPositions[i] - WorldPos);
         float attenuation = 1.0 / (distance * distance);
         vec3 radiance = lightColors[i] * attenuation;
 
-        // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);   
-        float G   = GeometrySmith(N, V, L, roughness);      
-        vec3 F    = fresnelSchlick(max(dot(H, V), 0.0), F0);
-           
-        vec3 numerator    = NDF * G * F; 
+        float G   = GeometrySmith(N, V, L, roughness);    
+        vec3 F   = fresnelSchlick(max(dot(H, V), 0.0), F0);        
+        
+        vec3 numerator    = NDF * G * F;
         float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001; // + 0.0001 to prevent divide by zero
         vec3 specular = numerator / denominator;
         
-        // kS is equal to Fresnel
         vec3 kS = F;
-        // for energy conservation, the diffuse and specular light can't
-        // be above 1.0 (unless the surface emits light); to preserve this
-        // relationship the diffuse component (kD) should equal 1.0 - kS.
         vec3 kD = vec3(1.0) - kS;
-        // multiply kD by the inverse metalness such that only non-metals 
-        // have diffuse lighting, or a linear blend if partly metal (pure metals
-        // have no diffuse light).
-        kD *= 1.0 - metallic;	  
-
-        // scale light by NdotL
+        kD *= 1.0 - metallic;	                
+            
         float NdotL = max(dot(N, L), 0.0);        
 
-        // add to outgoing radiance Lo
         Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }   
     
-    // ambient lighting (note that the next IBL tutorial will replace 
-    // this ambient lighting with environment lighting).
-    vec3 ambient = vec3(0.03) * albedo * ao;
+    vec3 F = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    
+    vec3 kS = F;
+    vec3 kD = 1.0 - kS;
+    kD *= 1.0 - metallic;	  
+    
+    vec3 irradiance = texture(irradianceMap, N).rgb;
+    vec3 diffuse      = irradiance * albedo;
+    
+    const float MAX_REFLECTION_LOD = 4.0;
+    vec3 prefilteredColor = textureLod(prefilterMap, R,  roughness * MAX_REFLECTION_LOD).rgb;    
+    vec2 brdf  = texture(brdfLUT, vec2(max(dot(N, V), 0.0), roughness)).rg;
+    vec3 specular = prefilteredColor * (F * brdf.x + brdf.y);
+
+    vec3 ambient = (kD * diffuse + specular) * ao;
 
     vec3 color = ambient;
     if (showShadows)
@@ -231,11 +225,8 @@ void main()
         color += Lo;
     }
 
-    // HDR tonemapping
     color = color / (color + vec3(1.0));
-    // gamma correct
     color = pow(color, vec3(1.0/2.2)); 
 
     FragColor = vec4(color, opacity);
-    // FragColor = vec4(vec3(shadow), 1.0);
 }

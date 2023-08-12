@@ -176,7 +176,6 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTran
 		vertices.push_back(vertex);
 	}
 
-	// Process indices
 	for (unsigned int i = 0; i < mesh->mNumFaces; ++i)
 	{
 		aiFace face = mesh->mFaces[i];
@@ -201,14 +200,8 @@ Mesh Model::processMesh(aiMesh *mesh, const aiScene *scene, glm::mat4 parentTran
 
 		std::vector<Texture> metallicMaps = loadMaterialTextures(material, aiTextureType_METALNESS, "metallic", 3);
 		textures.insert(textures.end(), metallicMaps.begin(), metallicMaps.end());
-
-		// std::vector<Texture> roughnessMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE_ROUGHNESS, "metallic", 3);
-		// textures.insert(textures.end(), roughnessMaps.begin(), roughnessMaps.end());
 	}
 
-	// printf("Vertices: %d\n", vertices.size());
-	// printf("Indices: %d\n", indices.size());
-	// printf("Textures: %d\n", textures.size());
 
 	return Mesh(vertices, indices, textures, parentTransform, mat);
 }
@@ -229,7 +222,6 @@ std::vector<Texture> Model::loadMaterialTextures(aiMaterial *mat, aiTextureType 
 			if (std::strcmp(texturePaths[j].c_str(), str.C_Str()) == 0)
 			{
 				textures.push_back(texturesLoaded[j]);
-				// printf("Loaded texture: %s, type %s\n", str.C_Str(), typeName.c_str());
 				skip = true;
 				break;
 			}
@@ -239,7 +231,6 @@ std::vector<Texture> Model::loadMaterialTextures(aiMaterial *mat, aiTextureType 
 		{
 			std::string texturePath = directory + '/' + std::string(str.C_Str());
 			Texture texture(texturePath.c_str(), typeName.c_str(), slot);
-			// printf("Loaded texture: %s, type %s\n", texturePath.c_str(), typeName.c_str());
 
 			textures.push_back(texture);
 			texturePaths.push_back(str.C_Str());
